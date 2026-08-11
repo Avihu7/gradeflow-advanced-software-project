@@ -1,0 +1,149 @@
+// GradeFlow - Prisma schema
+// Normalized relational model for a school assessment management system.
+// See docs/DATABASE.md for the entity-relationship diagram and rationale.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  TEACHER
+}
+
+enum AssessmentType {
+  EXAM // מבחן
+  QUIZ // בוחן
+  ASSIGNMENT // עבודה
+  PROJECT // פרויקט
+  PARTICIPATION // השתתפות
+  OTHER // אחר
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  teacherCourses TeacherCourse[]
+
+  @@index([role])
+  @@map("users")
+}
+
+model Student {
+  id            String   @id @default(cuid())
+  firstName     String
+  lastName      String
+  studentNumber String   @unique
+  email         String?
+  className     String
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  enrollments Enrollment[]
+  grades      Grade[]
+
+  @@index([active])
+  @@index([className])
+  @@map("students")
+}
+
+model Course {
+  id          String   @id @default(cuid())
+  name        String
+  code        String   @unique
+  schoolYear  String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  teacherCourses TeacherCourse[]
+  enrollments    Enrollment[]
+  assessments    Assessment[]
+
+  @@index([schoolYear])
+  @@map("courses")
+}
+
+/// Join table: which teacher(s) are assigned to which course(s).
+model TeacherCourse {
+  teacherId String
+  courseId  String
+  createdAt DateTime @default(now())
+
+  teacher User   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  course  Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@id([teacherId, courseId])
+  @@index([courseId])
+  @@map("teacher_courses")
+}
+
+/// Join table: which student(s) are enrolled in which course(s).
+model Enrollment {
+  studentId String
+  courseId  String
+  createdAt DateTime @default(now())
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@id([studentId, courseId])
+  @@index([courseId])
+  @@map("enrollments")
+}
+
+model Assessment {
+  id          String         @id @default(cuid())
+  courseId    String
+  title       String
+  type        AssessmentType
+  weight      Decimal        @db.Decimal(5, 2)
+  date        DateTime
+  description String?
+  published   Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  course Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  grades Grade[]
+
+  @@index([courseId])
+  @@map("assessments")
+}
+
+model Grade {
+  id           String   @id @default(cuid())
+  assessmentId String
+  studentId    String
+  score        Decimal  @db.Decimal(5, 2)
+  feedback     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  student    Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([assessmentId, studentId])
+  @@index([studentId])
+  @@map("grades")
+}
